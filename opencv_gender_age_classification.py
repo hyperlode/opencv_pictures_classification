@@ -25,6 +25,7 @@ age_list = ['(0, 2)', '(4, 6)', '(8, 12)', '(15, 20)', '(25, 32)', '(38, 43)', '
 gender_list = ['Male', 'Female']
 
 BASE_PATH = Path(r"C:\Data\GIT\python_opencv_gender_age_classification")
+DATABASE_PATH = r"C:\Temp\memcard9\classification\classification.db"
 
 def load_caffe_models():
  
@@ -197,7 +198,6 @@ def process_picture_from_database(record, save_dir, age_net, gender_net):
 
 
 def process_pictures_from_database( save_dir, age_net, gender_net):
-    DATABASE_PATH = r"C:\Temp\memcard9\classification\classification.db"
     db = classification_database_operations.ImageClassificationDatabaseOperations(DATABASE_PATH)
     
     records = db.get_records_by_status_and_change_status("TODO", "BUSY", count=10)
@@ -218,18 +218,21 @@ def process_pictures_from_database( save_dir, age_net, gender_net):
         records = db.get_records_by_status_and_change_status("TODO", "BUSY", count=10)
 
     
-def add_directory_to_database():
+def add_directory_to_database(directory):
 
     
     # PICTURES_BASE_PATH = Path(r"C:\Temp\memcard9\20210106")
     # PICTURES_BASE_PATH = Path(r"C:\Temp\memcard9\20201013")
     # PICTURES_BASE_PATH = Path(r"C:\Temp\memcard9\20201013\nikon")
 
-    DATABASE_PATH = r"C:\Temp\memcard9\classification\classification.db"
+    
     db = classification_database_operations.ImageClassificationDatabaseOperations(DATABASE_PATH)
 
    
-    db.add_directory(Path(r"C:\Temp\memcard9\20201013\nikon"))
+    db.add_directory(Path(directory))
+def restore_faulty_busy_database():
+    db = classification_database_operations.ImageClassificationDatabaseOperations(DATABASE_PATH)
+    db.reset_busy_to_todo_all_records()
 
 def independent_classify_one_picture():
     
@@ -247,6 +250,7 @@ def independent_classify_one_picture():
 if __name__ == "__main__":
 
     age_net, gender_net = load_caffe_models()
-    add_directory_to_database()
+    restore_faulty_busy_database()
+    # add_directory_to_database(r"C:\Temp\memcard9\202003xx")
     
-    process_pictures_from_database(r"C:\Temp\memcard9\classification\results",age_net, gender_net)
+    # process_pictures_from_database(r"C:\Temp\memcard9\classification\results",age_net, gender_net)

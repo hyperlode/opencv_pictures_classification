@@ -75,84 +75,36 @@ class ImageClassificationDatabaseOperations():
         # gender, gender_value, age_guess_min, age_guess_max
         self.db.update_record( PICTURE_TABLE_NAME  , data)
 
-    def get_record_by_status(self, primary_key_name, column_names, count=None, status=None):
-        # if count=None --> all
-        # if status=None --> no status needed.
-        # primary_key_name name --> will be separate key in output dict
-        # columns_names = list with requested columns (include primary_key_name)
+    def get_records_by_status(self, primary_key_name, column_names, count=None, status=None):
 
-        if status not in OPERATION_STATUSES:
-            self.logger.error("Illegal status {}".format(status))
-            return
-
-        column_names_sql = ",".join(column_names)
-
-        sql = "SELECT {} FROM {} WHERE {} = '{}'".format(
-            column_names_sql,
+        return self.db.get_records_by_status(
             PICTURE_TABLE_NAME,
+            primary_key_name,
+            column_names,
             "process_status",
-            status,
+            count=count,
+            status=status,
             )
-        rows = self.db.execute_sql_return_rows(sql,count)
-
-        row_dicts = []
-        for row in rows:
-            d = {}
-            for colname,v in zip(column_names, row):
-                d[colname] = v
-
-                if colname == primary_key_name:
-                    d["primary_key_value"] = v
-            
-            d["primary_key_name"] = primary_key_name
-
-            row_dicts.append(d)
-
-        return row_dicts
 
     def set_status_of_record(self, primary_key_name, primary_keys, status="BUSY"):
-
-        if status not in OPERATION_STATUSES:
-            self.logger.error("Illegal status {}".format(status))
-            return
-        
-        # set statuses as one sql transaction
-        ids_prepared = []
-        for k in primary_keys:
-            if type(k) is str:
-                ids_prepared.append("'{}'".format(k))
-            else:
-                ids_prepared.append(k)
-        
-        ids_formatted = ",".join(ids_prepared)
-
-        sql = "UPDATE '{}' SET {} = '{}' WHERE  {} in ({})".format(
+        self.db.set_status_of_record(
             PICTURE_TABLE_NAME,
-            "process_status",
-            status,
             primary_key_name,
-            ids_formatted,
+            primary_keys,
+            "process_status",
+            status=status,
             )
 
-        self.logger.info(sql)
-
-        self.db.execute_sql(sql)
-        self.db.commit()    
-
     def get_records_by_status_and_change_status(self, find_status, set_status, count=None):
-        primary_key_name = "path"
-        requested_columns = ["path","name"]
-        records = self.get_record_by_status(primary_key_name, requested_columns, status=find_status, count=count)
-        primary_key_values = [p["primary_key_value"] for p in records ]
-        self.set_status_of_record(primary_key_name, primary_key_values, set_status)
-        
-        return records
+        return self.db.get_records_by_status_and_change_status(
+            PICTURE_TABLE_NAME, 
+            "path",
+            ["path", "name"],
+            "process_status",
+            find_status,
+            set_status,
+            count=count
+            )
 
-    def database_check_if_processed():
-
-        pass
-
-    def database_add_results(self, primary_key_name, result_dict):
-
-        pass
-        
+    def reset_busy_to_todo_all_records(self):
+        self.get_records_by_status_and_change_status("BUSY", "TODO")
