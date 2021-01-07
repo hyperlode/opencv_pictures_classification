@@ -54,9 +54,11 @@ def detect_faces(cascade_path, test_image, scaleFactor = 1.1):
 
     # return image_copy
 
-def age_and_gender_from_picture(picture_path, age_net, gender_net, display=False):
+def age_and_gender_from_picture(picture_path, age_net, gender_net, display=False, save_path=None):
     font = cv2.FONT_HERSHEY_SIMPLEX
     
+    picture_path = str(picture_path)
+
     image = cv2.imread(picture_path,0) # reads image 'opencv-logo.png' as grayscale
     
     #loading image
@@ -74,27 +76,33 @@ def age_and_gender_from_picture(picture_path, age_net, gender_net, display=False
     for (x, y, w, h )in faces:
         cv2.rectangle(image, (x, y), (x+w, y+h), (255, 255, 0), 2)
 
-    #Get Face 
+        #Get Face 
         face_img = image[y:y+h, h:h+w].copy()
         blob = cv2.dnn.blobFromImage(face_img, 1, (227, 227), MODEL_MEAN_VALUES, swapRB=False)
 
-    #Predict Gender
+        #Predict Gender
         gender_net.setInput(blob)
         gender_preds = gender_net.forward()
-        gender = gender_list[gender_preds[0].argmax()]
-        print("Gender : " + gender)
+        print(gender_preds)
 
-    #Predict Age
+        i = gender_preds[0].argmax()
+        print(i)
+        percentage = round((gender_preds[0][i] * 100),1)
+        gender = gender_list[i]
+        gender_text = "{} ({}%)".format(gender, percentage)
+        print("Gender : {} ({}%)".format(gender, percentage))
+
+        #Predict Age
         age_net.setInput(blob)
         age_preds = age_net.forward()
         age = age_list[age_preds[0].argmax()]
         print("Age Range: " + age)
 
-        overlay_text = "%s %s" % (gender, age)
+        overlay_text = "%s %s" % (gender_text, age)
         cv2.putText(image, overlay_text, (x, y), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
     if display:    
-        scale_percent = 60 # percent of original size
+        scale_percent = 30 # percent of original size
         width = int(image.shape[1] * scale_percent / 100)
         height = int(image.shape[0] * scale_percent / 100)
         dim = (width, height)
@@ -105,7 +113,31 @@ def age_and_gender_from_picture(picture_path, age_net, gender_net, display=False
         cv2.resizeWindow("Display window", 100, 100)
         cv2.imshow( "Display window", image );                    #  Show our image inside it.
 
-    # return (
+    if save_path is not None:
+        
+        if len(faces)==0:
+        
+            gender = "no_face_found"
+            gender_text = "no_face_found"
+            age = "no_age_found"
+
+        path_part = save_path.parent
+
+        gender_path = Path(path_part, gender)
+        new_name = "{}_{}_{}".format(gender_text, age, save_path.name)
+
+        if not gender_path.is_dir():
+            gender_path.mkdir(parents=True, exist_ok=True)
+            print(gender_path)
+
+        final_save_path = str(Path(gender_path, new_name))
+
+        image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+ 
+        cv2.imwrite(final_save_path, image_gray)
+
+            
+
 
     # cv2.imshow('frame', image)  
     #0xFF is a hexadecimal constant which is 11111111 in binary.
@@ -116,12 +148,37 @@ def age_and_gender_from_picture(picture_path, age_net, gender_net, display=False
 
     # cv2.imshow('dst_rt', img)
     cv2.waitKey(0)
+
+def classify_directory(dir, save_dir, age_net, gender_net):
+    files = sorted(Path(dir).glob('*.jpg'))  # all files in current directory, no directory names.
+
+    for i, picture_path in enumerate(files):
+        print("process picture: {} of {}. ({})".format(
+            i,
+            len(files),
+            picture_path,
+            ))
+
+        picture_name = Path(picture_path).name
+        # picture_path = Path(PICTURES_BASE_PATH, picture_name)
+        picture_save_path = Path(save_dir, picture_name)
+
+        age_and_gender_from_picture(picture_path, age_net, gender_net, display=False, save_path=picture_save_path)
        
 
 if __name__ == "__main__":
     age_net, gender_net = load_caffe_models()
 
-    PICTURES_BASE_PATH = Path(r"C:\Temp\memcard9\20210106")
-    picture_path = str(Path(PICTURES_BASE_PATH, "IMG_20210106_170638379.jpg"))
-    # picture_path = str(Path(PICTURES_BASE_PATH, "IMG_20210106_170247561_BURST000_COVER_TOP.jpg")
-    age_and_gender_from_picture(picture_path, age_net, gender_net, display=True)
+    # PICTURES_BASE_PATH = Path(r"C:\Temp\memcard9\20210106")
+    PICTURES_BASE_PATH = Path(r"C:\Temp\memcard9\20201013")
+
+
+    PICTURES_SAVE_SUBFOLDER = "classified"
+    pictures_save_base_path = Path(PICTURES_BASE_PATH, PICTURES_SAVE_SUBFOLDER)
+    
+    classify_directory(PICTURES_BASE_PATH, pictures_save_base_path, age_net, gender_net)
+    # picture_name = "IMG_20210106_164121656_BURST000_COVER_COMP.jpg"
+    # picture_path = Path(PICTURES_BASE_PATH, picture_name)
+    # picture_save_path = Path(pictures_save_base_path, picture_name)
+
+    # age_and_gender_from_picture(picture_path, age_net, gender_net, display=True, save_path=picture_save_path)
