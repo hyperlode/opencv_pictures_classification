@@ -258,16 +258,43 @@ def independent_classify_one_picture(age_net, gender_net):
 #################################
 #   VIDEO 
 
-def detect_from_video(age_net, gender_net):
-    video_capture = cv2.VideoCapture(0)
+def detect_from_video(age_net, gender_net, video_path=None, frames_per_check=5):
 
-    # gender_average = 
+
+    
+    if video_path is not None:
+        video_capture= cv2.VideoCapture(video_path)
+
+        # # Grab a single frame of video
+        # ret, frame = cap.read()
+        # # Convert the image from BGR color (which OpenCV uses) to RGB   
+        # # color (which face_recognition uses)
+        # rgb_frame = frame[:, :, ::-1]
+        
+    else:
+        video_capture = cv2.VideoCapture(0)
+
+    frames_checked = 0
+    frame_count = 0
     gender_percentages_average = [0,0]
     gender_samples = [0,0]
     
     while True:
-        # Capture frame-by-frame
-        ret, frame = video_capture.read()
+        
+        while True:
+            # Capture frame-by-frame
+            ret, frame = video_capture.read()
+            frame_count += 1
+
+            if (frame_count % frames_per_check) == 0:
+                break
+            
+            if frame is None:
+                # end of video file
+                exit()
+
+        frames_checked +=1
+        
 
         # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -293,21 +320,24 @@ def detect_from_video(age_net, gender_net):
 
         frame, results = detect_age_gender(frame, faces,age_net, gender_net)
 
+        i = 666
         if (results["gender"] == gender_list[0]):
             i = 0
-        else:
+        elif  (results["gender"] == gender_list[1]):
             i = 1
-
-
-        gender_percentages_average[i] = round((results["gender_percentage"]  + gender_percentages_average[i] * gender_samples[i]) / (gender_samples[i] + 1),1)
-        gender_samples[i] += 1
+        
+        if i != 666:
+            gender_percentages_average[i] = round((results["gender_percentage"]  + gender_percentages_average[i] * gender_samples[i]) / (gender_samples[i] + 1),1)
+            gender_samples[i] += 1
         
         font = cv2.FONT_HERSHEY_SIMPLEX
-        overlay_text = "Male:{}({}%), Female:{}({}%)".format(
+        overlay_text = "Male:{}({}%), Female:{}({}%) frame check:{}/{}".format(
             gender_samples[0],
             gender_percentages_average[0],
             gender_samples[1],
             gender_percentages_average[1],
+            frames_checked,
+            frame_count,
             )
 
         cv2.putText(frame, overlay_text, (10, 50), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
@@ -322,7 +352,11 @@ if __name__ == "__main__":
 
     age_net, gender_net = load_caffe_models()
 
-    detect_from_video(age_net, gender_net)
+    video_path = r"C:\Temp\memcard9\202003xx\2020-03-26 21-48-41.mp4"
+    # video_path = r"C:\Temp\memcard9\20210106\VID_20210106_163801073.mp4"
+    # video_path = r"C:\Users\lode.ameije\Videos\Goli memories\2020-04-05 16-18-40.mp4"  # m
+    # video_path = r"C:\Temp\memcard9\20210106\VID_20210106_164259315.mp4"  # mixed
+    detect_from_video(age_net, gender_net, video_path)
 
     # independent_classify_one_picture(age_net, gender_net)
 
