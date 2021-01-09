@@ -38,6 +38,10 @@ def load_caffe_models():
     return(age_net, gender_net)
 
 def detect_faces(cascade_path, test_image, scaleFactor = 1.1):
+
+   
+    # haar_cascade = 'haarcascade_frontalface_default.xml'
+
     # create a copy of the image to prevent any changes to the original one.
     image_copy = test_image.copy()
 
@@ -57,31 +61,17 @@ def detect_faces(cascade_path, test_image, scaleFactor = 1.1):
 
     # return image_copy
 
-def age_and_gender_from_picture(picture_path, age_net, gender_net, display=False, save_path=None):
-    # ONLY RETURN DATA FOR ONE FACE
+# def detect_faces(image):
 
-
-    font = cv2.FONT_HERSHEY_SIMPLEX
     
-    picture_path = str(picture_path)
+   
 
-    image = cv2.imread(picture_path,0) # reads image 'opencv-logo.png' as grayscale
-    
-    #loading image
-    image = cv2.imread(picture_path)
+#     if(len(faces)>0):
+#         print("Found {} faces".format(str(len(faces))))
+   
+#     return faces
 
-
-    haar_cascade = 'haarcascade_frontalface_alt.xml'
-    # haar_cascade = 'haarcascade_frontalface_default.xml'
-    faces = detect_faces(
-        str(Path(BASE_PATH,haar_cascade)),  
-        image,
-        1.1,
-        )
-    
-    if(len(faces)>0):
-        print("Found {} faces".format(str(len(faces))))
-    
+def detect_age_gender(image, faces, age_net, gender_net):
 
     gender = "no_face_found"
     gender_text = "no_face_found"
@@ -94,8 +84,9 @@ def age_and_gender_from_picture(picture_path, age_net, gender_net, display=False
         "faces_count":0,
         }
 
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
     # biggest rectangle most likely match
-    biggest_face_index = 0
     biggest_face_width = 0
 
     for i, (x, y, w, h )in enumerate(faces):
@@ -136,7 +127,29 @@ def age_and_gender_from_picture(picture_path, age_net, gender_net, display=False
                 "gender_percentage":percentage,
                 "faces_count":len(faces),
                 }
+    return image, return_dict
 
+def age_and_gender_from_picture(picture_path, age_net, gender_net, display=False, save_path=None):
+    # ONLY RETURN DATA FOR ONE FACE
+
+
+    haar_cascade = 'haarcascade_frontalface_alt.xml'
+    
+    picture_path = str(picture_path)
+
+    image = cv2.imread(picture_path,0) # reads image 'opencv-logo.png' as grayscale
+    
+    #loading image
+    image = cv2.imread(picture_path)
+
+
+    faces = detect_faces(
+        str(Path(BASE_PATH,haar_cascade)),  
+        image,
+        1.1,
+        )
+    
+    images, return_dict = detect_age_gender(image, faces, age_net, gender_net)
 
     if display:    
         scale_percent = 30 # percent of original size
@@ -157,7 +170,7 @@ def age_and_gender_from_picture(picture_path, age_net, gender_net, display=False
         path_part = save_path.parent
 
         gender_path = Path(path_part, return_dict["gender"])
-        new_name = "{}({}%)_{}_{}".format(return_dict["gender"], return_dict["gender_percentage"], age, save_path.name)
+        new_name = "{}({}%)_{}_{}".format(return_dict["gender"], return_dict["gender_percentage"], return_dict["age_guess_max"], save_path.name)
 
         if not gender_path.is_dir():
             gender_path.mkdir(parents=True, exist_ok=True)
@@ -230,7 +243,7 @@ def restore_faulty_busy_database():
 
 #################################
 #   ONE PICTURE
-def independent_classify_one_picture():
+def independent_classify_one_picture(age_net, gender_net):
     
     PICTURES_SAVE_SUBFOLDER = "classified"
     PICTURES_BASE_PATH = r"C:\Temp\memcard9\20210106"
@@ -242,10 +255,77 @@ def independent_classify_one_picture():
 
     print(age_and_gender_from_picture(picture_path, age_net, gender_net, display=True, save_path=picture_save_path))
 
+#################################
+#   VIDEO 
+
+def detect_from_video(age_net, gender_net):
+    video_capture = cv2.VideoCapture(0)
+
+    # gender_average = 
+    gender_percentages_average = [0,0]
+    gender_samples = [0,0]
+    
+    while True:
+        # Capture frame-by-frame
+        ret, frame = video_capture.read()
+
+        # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        haar_cascade = 'haarcascade_frontalface_alt.xml'
+
+        faces = detect_faces(
+            str(Path(BASE_PATH,haar_cascade)),  
+            frame,
+            1.1,
+            )
+
+        # faces = faceCascade.detectMultiScale(
+        #     gray,
+        #     scaleFactor=1.1,
+        #     minNeighbors=5,
+        #     minSize=(30, 30),
+        #     flags=cv2.cv.CV_HAAR_SCALE_IMAGE
+        # )
+
+        # # Draw a rectangle around the faces
+        # for (x, y, w, h) in faces:
+        #     cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+
+        frame, results = detect_age_gender(frame, faces,age_net, gender_net)
+
+        if (results["gender"] == gender_list[0]):
+            i = 0
+        else:
+            i = 1
+
+
+        gender_percentages_average[i] = round((results["gender_percentage"]  + gender_percentages_average[i] * gender_samples[i]) / (gender_samples[i] + 1),1)
+        gender_samples[i] += 1
+        
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        overlay_text = "Male:{}({}%), Female:{}({}%)".format(
+            gender_samples[0],
+            gender_percentages_average[0],
+            gender_samples[1],
+            gender_percentages_average[1],
+            )
+
+        cv2.putText(frame, overlay_text, (10, 50), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+        # Display the resulting frame
+        cv2.imshow('Video', frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
 if __name__ == "__main__":
 
     age_net, gender_net = load_caffe_models()
-    restore_faulty_busy_database()
-    add_directory_to_database(r"C:\Temp\memcard9\20210106\google compressed")
-    process_pictures_from_database(r"C:\Temp\memcard9\classification\results",age_net, gender_net)
+
+    detect_from_video(age_net, gender_net)
+
+    # independent_classify_one_picture(age_net, gender_net)
+
+    # restore_faulty_busy_database()
+    # add_directory_to_database(r"C:\Temp\memcard9\20210106\google compressed")
+    # process_pictures_from_database(r"C:\Temp\memcard9\classification\results",age_net, gender_net)
