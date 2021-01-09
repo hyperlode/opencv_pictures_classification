@@ -71,8 +71,8 @@ def age_and_gender_from_picture(picture_path, age_net, gender_net, display=False
     image = cv2.imread(picture_path)
 
 
-    # haar_cascade = 'haarcascade_frontalface_alt.xml'
-    haar_cascade = 'haarcascade_frontalface_default.xml'
+    haar_cascade = 'haarcascade_frontalface_alt.xml'
+    # haar_cascade = 'haarcascade_frontalface_default.xml'
     faces = detect_faces(
         str(Path(BASE_PATH,haar_cascade)),  
         image,
@@ -187,6 +187,10 @@ def age_and_gender_from_picture(picture_path, age_net, gender_net, display=False
 
 #         age_and_gender_from_picture(picture_path, age_net, gender_net, display=False, save_path=picture_save_path)
 
+
+##################################
+# MULTIPLE PICTURES
+
 def process_picture_from_database(record, save_dir, age_net, gender_net):
     picture_path = Path(record["path"])
 
@@ -195,7 +199,6 @@ def process_picture_from_database(record, save_dir, age_net, gender_net):
     picture_save_path = Path(save_dir, picture_name)
 
     return age_and_gender_from_picture(picture_path, age_net, gender_net, display=False, save_path=picture_save_path)
-
 
 def process_pictures_from_database( save_dir, age_net, gender_net):
     db = classification_database_operations.ImageClassificationDatabaseOperations(DATABASE_PATH)
@@ -216,24 +219,17 @@ def process_pictures_from_database( save_dir, age_net, gender_net):
                 print(e)
 
         records = db.get_records_by_status_and_change_status("TODO", "BUSY", count=10)
-
     
 def add_directory_to_database(directory):
-
-    
-    # PICTURES_BASE_PATH = Path(r"C:\Temp\memcard9\20210106")
-    # PICTURES_BASE_PATH = Path(r"C:\Temp\memcard9\20201013")
-    # PICTURES_BASE_PATH = Path(r"C:\Temp\memcard9\20201013\nikon")
-
-    
     db = classification_database_operations.ImageClassificationDatabaseOperations(DATABASE_PATH)
-
-   
     db.add_directory(Path(directory))
+
 def restore_faulty_busy_database():
     db = classification_database_operations.ImageClassificationDatabaseOperations(DATABASE_PATH)
     db.reset_busy_to_todo_all_records()
 
+#################################
+#   ONE PICTURE
 def independent_classify_one_picture():
     
     PICTURES_SAVE_SUBFOLDER = "classified"
@@ -251,6 +247,5 @@ if __name__ == "__main__":
 
     age_net, gender_net = load_caffe_models()
     restore_faulty_busy_database()
-    # add_directory_to_database(r"C:\Temp\memcard9\202003xx")
-    
-    # process_pictures_from_database(r"C:\Temp\memcard9\classification\results",age_net, gender_net)
+    add_directory_to_database(r"C:\Temp\memcard9\20210106\google compressed")
+    process_pictures_from_database(r"C:\Temp\memcard9\classification\results",age_net, gender_net)

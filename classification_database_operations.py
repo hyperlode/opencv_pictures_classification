@@ -25,8 +25,6 @@ PICTURES_TABLE_COLUMNS = {
     "process_status":str,
 }
 
-OPERATION_STATUSES = ["TODO", "BUSY", "DONE"]
-
 class ImageClassificationDatabaseOperations():
     def __init__(self, db_path, logger=None):
         self.logger = logger or logging.getLogger(__name__)
@@ -46,7 +44,6 @@ class ImageClassificationDatabaseOperations():
             )
 
     def add_directory(self, dir, extensions=["jpg","jpeg"]):
-
         extensions = [e.lower() for e in extensions]
 
         files = []
@@ -54,11 +51,11 @@ class ImageClassificationDatabaseOperations():
             files.extend (sorted(Path(dir).glob('*.{}'.format(extension))))  # all files in current directory, no directory names.
 
         for i, picture_path in enumerate(files):
-            print("process picture: {} of {}. ({})".format(
-                i,
-                len(files),
-                picture_path,
-                ))
+            # print("add picture to process: {} of {}. ({})".format(
+            #     i,
+            #     len(files),
+            #     picture_path,
+            #     ))
 
             picture_name = Path(picture_path).name
             record_dict = {
@@ -68,8 +65,8 @@ class ImageClassificationDatabaseOperations():
                 }
             
             self.db.add_record(PICTURE_TABLE_NAME, record_dict)
-            # picture_save_path = Path(save_dir, picture_name)
-            # age_and_gender_from_picture(picture_path, age_net, gender_net, display=False, save_path=picture_save_path)
+
+        print("found {} picture to be processed")
 
     def update_record(self, data ):
         # gender, gender_value, age_guess_min, age_guess_max
