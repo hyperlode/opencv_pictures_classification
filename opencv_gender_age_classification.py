@@ -38,8 +38,6 @@ def load_caffe_models():
     return(age_net, gender_net)
 
 def detect_faces(cascade_path, test_image, scaleFactor = 1.1):
-
-   
     # haar_cascade = 'haarcascade_frontalface_default.xml'
 
     # create a copy of the image to prevent any changes to the original one.
@@ -47,9 +45,7 @@ def detect_faces(cascade_path, test_image, scaleFactor = 1.1):
 
     #convert the test image to gray scale as opencv face detector expects gray images
     gray_image = cv2.cvtColor(image_copy, cv2.COLOR_BGR2GRAY)
-    
 
-    print(cascade_path)
     face_cascade = cv2.CascadeClassifier(cascade_path)
     
     # Applying the haar classifier to detect faces
@@ -60,16 +56,6 @@ def detect_faces(cascade_path, test_image, scaleFactor = 1.1):
         # cv2.rectangle(image_copy, (x, y), (x+w, y+h), (0, 255, 0), 15)
 
     # return image_copy
-
-# def detect_faces(image):
-
-    
-   
-
-#     if(len(faces)>0):
-#         print("Found {} faces".format(str(len(faces))))
-   
-#     return faces
 
 def detect_age_gender(image, faces, age_net, gender_net):
 
@@ -99,20 +85,18 @@ def detect_age_gender(image, faces, age_net, gender_net):
         #Predict Gender
         gender_net.setInput(blob)
         gender_preds = gender_net.forward()
-        print(gender_preds)
 
         i = gender_preds[0].argmax()
-        print(i)
         percentage = round((gender_preds[0][i] * 100),1)
         gender = gender_list[i]
         gender_text = "{} ({}%)".format(gender, percentage)
-        print("Gender : {} ({}%)".format(gender, percentage))
+        tmp_txt = "Gender : {} ({}%)".format(gender, percentage)
 
         #Predict Age
         age_net.setInput(blob)
         age_preds = age_net.forward()
         age = age_list[age_preds[0].argmax()]
-        print("Age Range: " + age)
+        print("{} , Age Range: {}".format(tmp_txt,age))
 
         overlay_text = "%s %s" % (gender_text, age)
         cv2.putText(image, overlay_text, (x, y), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
@@ -241,29 +225,34 @@ def restore_faulty_busy_database():
     db = classification_database_operations.ImageClassificationDatabaseOperations(DATABASE_PATH)
     db.reset_busy_to_todo_all_records()
 
-#################################
-#   ONE PICTURE
-def independent_classify_one_picture(age_net, gender_net):
-    
-    PICTURES_SAVE_SUBFOLDER = "classified"
-    PICTURES_BASE_PATH = r"C:\Temp\memcard9\20210106"
-    pictures_save_base_path = Path(PICTURES_BASE_PATH, PICTURES_SAVE_SUBFOLDER)
-
-    picture_name = "IMG_20210106_164121656_BURST000_COVER_COMP.jpg"
-    picture_path = Path(PICTURES_BASE_PATH, picture_name)
-    picture_save_path = Path(pictures_save_base_path, picture_name)
-
-    print(age_and_gender_from_picture(picture_path, age_net, gender_net, display=True, save_path=picture_save_path))
 
 #################################
 #   VIDEO 
 
-def detect_from_video(age_net, gender_net, video_path=None, frames_per_check=5):
+def process_videos_in_directory(age_net, gender_net, directory, extensions, frames_per_check=5, video_out_directory=None):
 
+    extensions = [e.lower() for e in extensions]
 
+    files = []
+    for extension in extensions:
+        files.extend (sorted(Path(directory).glob('*.{}'.format(extension))))  # all files in current directory, no directory names.
+        print(extension)
+    print(files)
+    for i, video_path in enumerate(files):
+        print("videos to process: {} of {}. ({})".format(
+            i,
+            len(files),
+            video_path,
+            ))
+
+        detect_from_video(age_net, gender_net, video_path=video_path, frames_per_check=5, video_out_directory=video_out_directory)
+    
+        
+def detect_from_video(age_net, gender_net, video_path=None, frames_per_check=5, video_out_directory=None):
+    
     
     if video_path is not None:
-        video_capture= cv2.VideoCapture(video_path)
+        video_capture= cv2.VideoCapture(str(video_path))
 
         # # Grab a single frame of video
         # ret, frame = cap.read()
@@ -273,6 +262,34 @@ def detect_from_video(age_net, gender_net, video_path=None, frames_per_check=5):
         
     else:
         video_capture = cv2.VideoCapture(0)
+
+    # frame_width = 640
+    # frame_height = 480
+
+    # Default resolutions of the frame are obtained.The default resolutions are system dependent.
+    # We convert the resolutions from float to integer.
+    frame_width = int(video_capture.get(3))
+    frame_height = int(video_capture.get(4))
+
+
+    if video_out_directory is not None:
+        # out = cv2.VideoWriter(video_out_path, -1, 20.0, (640,480))  # 'output.avi'
+        # Define the codec and create VideoWriter object.The output is stored in 'outpy.avi' file.
+        # Define the fps to be equal to 10. Also frame size is passed.
+
+        video_out_directory = Path(video_out_directory)
+        if video_path is None:
+            name = "cam"
+        else:
+            
+            name = Path(video_path).stem
+        video_out_path = Path(video_out_directory, "{}_overlayed.avi".format(name))
+        print(video_out_path)
+        out = cv2.VideoWriter(str(video_out_path),
+            cv2.VideoWriter_fourcc('M','J','P','G'),
+            10,
+            (frame_width,frame_height))
+
 
     frames_checked = 0
     frame_count = 0
@@ -289,12 +306,13 @@ def detect_from_video(age_net, gender_net, video_path=None, frames_per_check=5):
             if (frame_count % frames_per_check) == 0:
                 break
             
-            if frame is None:
-                # end of video file
-                exit()
-
+        
         frames_checked +=1
         
+        if frame is None:
+            # end of video file
+            break
+
 
         # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -342,24 +360,60 @@ def detect_from_video(age_net, gender_net, video_path=None, frames_per_check=5):
 
         cv2.putText(frame, overlay_text, (10, 50), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
+        if video_out_directory is not None:
+            out.write(frame)
+
         # Display the resulting frame
         cv2.imshow('Video', frame)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-if __name__ == "__main__":
+    # Release everything if job is finished
+    # image.release()
+    out.release()
+    cv2.destroyAllWindows()
 
+#################################
+#   ONE PICTURE
+def independent_classify_one_picture(age_net, gender_net):
+    
+    PICTURES_SAVE_SUBFOLDER = "classified"
+    PICTURES_BASE_PATH = r"C:\Temp\memcard9\20210106"
+    pictures_save_base_path = Path(PICTURES_BASE_PATH, PICTURES_SAVE_SUBFOLDER)
+
+    picture_name = "IMG_20210106_164121656_BURST000_COVER_COMP.jpg"
+    picture_path = Path(PICTURES_BASE_PATH, picture_name)
+    picture_save_path = Path(pictures_save_base_path, picture_name)
+
+    print(age_and_gender_from_picture(picture_path, age_net, gender_net, display=True, save_path=picture_save_path))
+    
+#################################
+#   ONE VIDEO
+def process_one_video():
     age_net, gender_net = load_caffe_models()
-
-    video_path = r"C:\Temp\memcard9\202003xx\2020-03-26 21-48-41.mp4"
+    video_path = None
+    # video_path = r"C:\Temp\memcard9\202003xx\2020-03-26 21-48-41.mp4"
+    # video_path = r"C:\Temp\memcard9\20210106\VID_20210106_163232639.mp4"
     # video_path = r"C:\Temp\memcard9\20210106\VID_20210106_163801073.mp4"
     # video_path = r"C:\Users\lode.ameije\Videos\Goli memories\2020-04-05 16-18-40.mp4"  # m
     # video_path = r"C:\Temp\memcard9\20210106\VID_20210106_164259315.mp4"  # mixed
-    detect_from_video(age_net, gender_net, video_path)
+    video_out_directory = Path(r"c:\Temp\memcard9\classification")
+    detect_from_video(age_net, gender_net, video_path, 10, video_out_directory)
 
+if __name__ == "__main__":
+
+    age_net, gender_net = load_caffe_models()
+   
     # independent_classify_one_picture(age_net, gender_net)
 
     # restore_faulty_busy_database()
     # add_directory_to_database(r"C:\Temp\memcard9\20210106\google compressed")
     # process_pictures_from_database(r"C:\Temp\memcard9\classification\results",age_net, gender_net)
+
+    process_one_video()
+
+    # video_directory = r"C:\Temp\memcard9\20210106" 
+    # video_directory = r"C:\Temp\memcard9\20210106" 
+    # video_out_directory = Path(r"c:\Temp\memcard9\classification")
+    # process_videos_in_directory(age_net, gender_net, video_directory, ["mp4"], 10, video_out_directory)
