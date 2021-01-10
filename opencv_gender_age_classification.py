@@ -3,20 +3,10 @@ from pathlib import Path
 
 import numpy as np
 import cv2
-# import pafy
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 import classification_database_operations
-
-# #url of the video to predict Age and gender
-# url = 'https://www.youtube.com/watch?v=c07IsbSNqfI&feature=youtu.be'
-# vPafy = pafy.new(url)
-# play = vPafy.getbest(preftype="mp4")
-
-# cap = cv2.VideoCapture(play.url)
-
-# cap.set(3, 480) #set width of the frame
-# cap.set(4, 640) #set height of the frame
+import opencv_classifier_operations
 
 MODEL_MEAN_VALUES = (78.4263377603, 87.7689143744, 114.895847746)
 
@@ -27,130 +17,21 @@ gender_list = ['Male', 'Female']
 BASE_PATH = Path(r"C:\Data\GIT\python_opencv_gender_age_classification")
 DATABASE_PATH = r"C:\Temp\memcard9\classification\classification.db"
 
-def load_caffe_models():
- 
-    age_net = cv2.dnn.readNetFromCaffe(str(Path(BASE_PATH, 'deploy_age.prototxt')), str(Path(BASE_PATH, 'age_net.caffemodel')))
-    
-    path_prototxt = str(Path(BASE_PATH, "deploy_gender.prototxt"))
-    caffemodel_path = str(Path(r"C:\Data\GIT\python_opencv_gender_age_classification\gender_net.caffemodel"))
-    gender_net = cv2.dnn.readNetFromCaffe(path_prototxt, caffemodel_path)
+#################################
+#   ONE PICTURE
 
-    return(age_net, gender_net)
-
-def detect_faces(cascade_path, test_image, scaleFactor = 1.1):
-    # haar_cascade = 'haarcascade_frontalface_default.xml'
-
-    # create a copy of the image to prevent any changes to the original one.
-    image_copy = test_image.copy()
-
-    #convert the test image to gray scale as opencv face detector expects gray images
-    gray_image = cv2.cvtColor(image_copy, cv2.COLOR_BGR2GRAY)
-
-    face_cascade = cv2.CascadeClassifier(cascade_path)
-    
-    # Applying the haar classifier to detect faces
-    faces_rect = face_cascade.detectMultiScale(gray_image, scaleFactor=scaleFactor, minNeighbors=5)
-    
-    return faces_rect
-    # for (x, y, w, h) in faces_rect:
-        # cv2.rectangle(image_copy, (x, y), (x+w, y+h), (0, 255, 0), 15)
-
-    # return image_copy
-
-def detect_age_gender(image, faces, age_net, gender_net):
-
-    gender = "no_face_found"
-    gender_text = "no_face_found"
-    age = "no_age_found"
-    return_dict = {
-        "age_guess_min":0,
-        "age_guess_max":0,
-        "gender":"unknown",
-        "gender_percentage":0,
-        "faces_count":0,
-        }
-
-    font = cv2.FONT_HERSHEY_SIMPLEX
-
-    # biggest rectangle most likely match
-    biggest_face_width = 0
-
-    for i, (x, y, w, h )in enumerate(faces):
-        cv2.rectangle(image, (x, y), (x+w, y+h), (255, 255, 0), 2)
-
-        #Get Face 
-        face_img = image[y:y+h, h:h+w].copy()
-        blob = cv2.dnn.blobFromImage(face_img, 1, (227, 227), MODEL_MEAN_VALUES, swapRB=False)
-
-        #Predict Gender
-        gender_net.setInput(blob)
-        gender_preds = gender_net.forward()
-
-        i = gender_preds[0].argmax()
-        percentage = round((gender_preds[0][i] * 100),1)
-        gender = gender_list[i]
-        gender_text = "{} ({}%)".format(gender, percentage)
-        tmp_txt = "Gender : {} ({}%)".format(gender, percentage)
-
-        #Predict Age
-        age_net.setInput(blob)
-        age_preds = age_net.forward()
-        age = age_list[age_preds[0].argmax()]
-        print("{} , Age Range: {}".format(tmp_txt,age))
-
-        overlay_text = "%s %s" % (gender_text, age)
-        cv2.putText(image, overlay_text, (x, y), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
-
-        if w >biggest_face_width:
-            biggest_face_index = i
-            biggest_face_width = w
-            return_dict = {
-                "age_guess_min":age,
-                "age_guess_max":age,
-                "gender":gender,
-                "gender_percentage":percentage,
-                "faces_count":len(faces),
-                }
-    return image, return_dict
-
-def age_and_gender_from_picture(picture_path, age_net, gender_net, display=False, save_path=None):
+def age_and_gender_from_picture(picture_path, display=False, save_path=None):
     # ONLY RETURN DATA FOR ONE FACE
 
+    classifier = opencv_classifier_operations.Classifier(BASE_PATH, True, True, True)
+    classifier.load_image(picture_path)
 
-    haar_cascade = 'haarcascade_frontalface_alt.xml'
-    
-    picture_path = str(picture_path)
-
-    image = cv2.imread(picture_path,0) # reads image 'opencv-logo.png' as grayscale
-    
-    #loading image
-    image = cv2.imread(picture_path)
-
-
-    faces = detect_faces(
-        str(Path(BASE_PATH,haar_cascade)),  
-        image,
-        1.1,
-        )
-    
-    images, return_dict = detect_age_gender(image, faces, age_net, gender_net)
+    return_dict = classifier.detect_age_gender()
 
     if display:    
-        scale_percent = 30 # percent of original size
-        width = int(image.shape[1] * scale_percent / 100)
-        height = int(image.shape[0] * scale_percent / 100)
-        dim = (width, height)
+        classifier.display_picture()
 
-        image = cv2.resize(image, dim, interpolation = cv2.INTER_AREA)
-
-        cv2.namedWindow( "Display window"); #  Create a window for display.
-        cv2.resizeWindow("Display window", 100, 100)
-        cv2.imshow( "Display window", image );                    #  Show our image inside it.
-
-        cv2.waitKey(0)
-
-    if save_path is not None:
-
+    if save_path:
         path_part = save_path.parent
 
         gender_path = Path(path_part, return_dict["gender"])
@@ -162,42 +43,23 @@ def age_and_gender_from_picture(picture_path, age_net, gender_net, display=False
 
         final_save_path = str(Path(gender_path, new_name))
 
-        image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
- 
-        cv2.imwrite(final_save_path, image_gray)
+        classifier.save_picture(final_save_path)
 
     return return_dict
-
-# def classify_directory(dir, save_dir, age_net, gender_net):
-#     files = sorted(Path(dir).glob('*.jpg'))  # all files in current directory, no directory names.
-
-#     for i, picture_path in enumerate(files):
-#         print("process picture: {} of {}. ({})".format(
-#             i,
-#             len(files),
-#             picture_path,
-#             ))
-
-#         picture_name = Path(picture_path).name
-#         # picture_path = Path(PICTURES_BASE_PATH, picture_name)
-#         picture_save_path = Path(save_dir, picture_name)
-
-#         age_and_gender_from_picture(picture_path, age_net, gender_net, display=False, save_path=picture_save_path)
-
 
 ##################################
 # MULTIPLE PICTURES
 
-def process_picture_from_database(record, save_dir, age_net, gender_net):
+def process_picture_from_database(record, save_dir):
     picture_path = Path(record["path"])
 
     picture_name = Path(picture_path).name
 
     picture_save_path = Path(save_dir, picture_name)
 
-    return age_and_gender_from_picture(picture_path, age_net, gender_net, display=False, save_path=picture_save_path)
+    return age_and_gender_from_picture(picture_path, display=False, save_path=picture_save_path)
 
-def process_pictures_from_database( save_dir, age_net, gender_net):
+def process_pictures_from_database( save_dir):
     db = classification_database_operations.ImageClassificationDatabaseOperations(DATABASE_PATH)
     
     records = db.get_records_by_status_and_change_status("TODO", "BUSY", count=10)
@@ -206,7 +68,7 @@ def process_pictures_from_database( save_dir, age_net, gender_net):
         for record in records:
             print(record)
             try:
-                classification_data = process_picture_from_database(record, save_dir, age_net, gender_net)
+                classification_data = process_picture_from_database(record, save_dir)
                 classification_data["primary_key_name"] = record["primary_key_name"]
                 classification_data["primary_key_value"] = record["primary_key_value"]
                 classification_data["process_status"] = "DONE"
@@ -229,7 +91,7 @@ def restore_faulty_busy_database():
 #################################
 #   VIDEO 
 
-def process_videos_in_directory(age_net, gender_net, directory, extensions, frames_per_check=5, video_out_directory=None):
+def process_videos_in_directory(directory, extensions, frames_per_check=5, video_out_directory=None):
 
     extensions = [e.lower() for e in extensions]
 
@@ -245,51 +107,72 @@ def process_videos_in_directory(age_net, gender_net, directory, extensions, fram
             video_path,
             ))
 
-        detect_from_video(age_net, gender_net, video_path=video_path, frames_per_check=5, video_out_directory=video_out_directory)
+        detect_from_video(video_path=video_path, frames_per_check=5, video_out_directory=video_out_directory)
     
         
-def detect_from_video(age_net, gender_net, video_path=None, frames_per_check=5, video_out_directory=None):
+
+#################################
+#   ONE PICTURE
+
+def independent_classify_one_picture():
     
-    
+    PICTURES_SAVE_SUBFOLDER = "classified"
+    PICTURES_BASE_PATH = r"C:\Temp\memcard9\20210106"
+    pictures_save_base_path = Path(PICTURES_BASE_PATH, PICTURES_SAVE_SUBFOLDER)
+
+    picture_name = "IMG_20210106_164121656_BURST000_COVER_COMP.jpg"
+    picture_path = Path(PICTURES_BASE_PATH, picture_name)
+    picture_save_path = Path(pictures_save_base_path, picture_name)
+
+    print(age_and_gender_from_picture(picture_path, display=True, save_path=picture_save_path))
+
+#################################
+#   ONE VIDEO
+def process_one_video():
+    video_path = None
+    # video_path = r"C:\Temp\memcard9\202003xx\2020-03-26 21-48-41.mp4"
+    # video_path = r"C:\Temp\memcard9\20210106\VID_20210106_163232639.mp4"
+    # video_path = r"C:\Temp\memcard9\20210106\VID_20210106_163801073.mp4"
+    video_path = r"C:\Temp\memcard9\202003xx\2020-03-26 21-45-55.mp4"
+
+    # video_path = r"C:\Users\lode.ameije\Videos\Goli memories\2020-04-05 16-18-40.mp4"  # m
+    # video_path = r"C:\Temp\memcard9\20210106\VID_20210106_164259315.mp4"  # mixed
+    video_out_directory = Path(r"c:\Temp\memcard9\classification")
+    detect_from_video( video_path, 10, video_out_directory)
+
+def detect_from_video(video_path=None, frames_per_check=5, video_out_directory=None):
+
+    classifier = opencv_classifier_operations.Classifier(BASE_PATH, True, True, True)
+
     if video_path is not None:
         video_capture= cv2.VideoCapture(str(video_path))
 
-        # # Grab a single frame of video
-        # ret, frame = cap.read()
-        # # Convert the image from BGR color (which OpenCV uses) to RGB   
-        # # color (which face_recognition uses)
-        # rgb_frame = frame[:, :, ::-1]
-        
     else:
         video_capture = cv2.VideoCapture(0)
-
-    # frame_width = 640
-    # frame_height = 480
-
+    
     # Default resolutions of the frame are obtained.The default resolutions are system dependent.
     # We convert the resolutions from float to integer.
     frame_width = int(video_capture.get(3))
     frame_height = int(video_capture.get(4))
 
-
     if video_out_directory is not None:
-        # out = cv2.VideoWriter(video_out_path, -1, 20.0, (640,480))  # 'output.avi'
         # Define the codec and create VideoWriter object.The output is stored in 'outpy.avi' file.
         # Define the fps to be equal to 10. Also frame size is passed.
 
         video_out_directory = Path(video_out_directory)
         if video_path is None:
             name = "cam"
+
         else:
-            
             name = Path(video_path).stem
+
         video_out_path = Path(video_out_directory, "{}_overlayed.avi".format(name))
         print(video_out_path)
+
         out = cv2.VideoWriter(str(video_out_path),
             cv2.VideoWriter_fourcc('M','J','P','G'),
             10,
             (frame_width,frame_height))
-
 
     frames_checked = 0
     frame_count = 0
@@ -297,7 +180,6 @@ def detect_from_video(age_net, gender_net, video_path=None, frames_per_check=5, 
     gender_samples = [0,0]
     
     while True:
-        
         while True:
             # Capture frame-by-frame
             ret, frame = video_capture.read()
@@ -305,38 +187,15 @@ def detect_from_video(age_net, gender_net, video_path=None, frames_per_check=5, 
 
             if (frame_count % frames_per_check) == 0:
                 break
-            
         
         frames_checked +=1
         
         if frame is None:
             # end of video file
             break
-
-
-        # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        haar_cascade = 'haarcascade_frontalface_alt.xml'
-
-        faces = detect_faces(
-            str(Path(BASE_PATH,haar_cascade)),  
-            frame,
-            1.1,
-            )
-
-        # faces = faceCascade.detectMultiScale(
-        #     gray,
-        #     scaleFactor=1.1,
-        #     minNeighbors=5,
-        #     minSize=(30, 30),
-        #     flags=cv2.cv.CV_HAAR_SCALE_IMAGE
-        # )
-
-        # # Draw a rectangle around the faces
-        # for (x, y, w, h) in faces:
-        #     cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-
-        frame, results = detect_age_gender(frame, faces,age_net, gender_net)
+        classifier.set_image(frame)
+        
+        results= classifier.detect_age_gender()
 
         i = 666
         if (results["gender"] == gender_list[0]):
@@ -347,8 +206,7 @@ def detect_from_video(age_net, gender_net, video_path=None, frames_per_check=5, 
         if i != 666:
             gender_percentages_average[i] = round((results["gender_percentage"]  + gender_percentages_average[i] * gender_samples[i]) / (gender_samples[i] + 1),1)
             gender_samples[i] += 1
-        
-        font = cv2.FONT_HERSHEY_SIMPLEX
+
         overlay_text = "Male:{}({}%), Female:{}({}%) frame check:{}/{}".format(
             gender_samples[0],
             gender_percentages_average[0],
@@ -357,14 +215,16 @@ def detect_from_video(age_net, gender_net, video_path=None, frames_per_check=5, 
             frames_checked,
             frame_count,
             )
-
-        cv2.putText(frame, overlay_text, (10, 50), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
-
+                
+        classifier.draw_text(overlay_text, 10, 50)
+        
+        
         if video_out_directory is not None:
-            out.write(frame)
+            out.write(classifier.get_image())
 
         # Display the resulting frame
-        cv2.imshow('Video', frame)
+        # cv2.imshow('Video', frame)
+        classifier.display_picture(wait_for_user=False)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
@@ -372,48 +232,23 @@ def detect_from_video(age_net, gender_net, video_path=None, frames_per_check=5, 
     # Release everything if job is finished
     # image.release()
     out.release()
-    cv2.destroyAllWindows()
-
-#################################
-#   ONE PICTURE
-def independent_classify_one_picture(age_net, gender_net):
-    
-    PICTURES_SAVE_SUBFOLDER = "classified"
-    PICTURES_BASE_PATH = r"C:\Temp\memcard9\20210106"
-    pictures_save_base_path = Path(PICTURES_BASE_PATH, PICTURES_SAVE_SUBFOLDER)
-
-    picture_name = "IMG_20210106_164121656_BURST000_COVER_COMP.jpg"
-    picture_path = Path(PICTURES_BASE_PATH, picture_name)
-    picture_save_path = Path(pictures_save_base_path, picture_name)
-
-    print(age_and_gender_from_picture(picture_path, age_net, gender_net, display=True, save_path=picture_save_path))
-    
-#################################
-#   ONE VIDEO
-def process_one_video():
-    age_net, gender_net = load_caffe_models()
-    video_path = None
-    # video_path = r"C:\Temp\memcard9\202003xx\2020-03-26 21-48-41.mp4"
-    # video_path = r"C:\Temp\memcard9\20210106\VID_20210106_163232639.mp4"
-    # video_path = r"C:\Temp\memcard9\20210106\VID_20210106_163801073.mp4"
-    # video_path = r"C:\Users\lode.ameije\Videos\Goli memories\2020-04-05 16-18-40.mp4"  # m
-    # video_path = r"C:\Temp\memcard9\20210106\VID_20210106_164259315.mp4"  # mixed
-    video_out_directory = Path(r"c:\Temp\memcard9\classification")
-    detect_from_video(age_net, gender_net, video_path, 10, video_out_directory)
+    classifier.reset()
 
 if __name__ == "__main__":
 
-    age_net, gender_net = load_caffe_models()
-   
-    # independent_classify_one_picture(age_net, gender_net)
+    # independent_classify_one_picture()
 
     # restore_faulty_busy_database()
     # add_directory_to_database(r"C:\Temp\memcard9\20210106\google compressed")
-    # process_pictures_from_database(r"C:\Temp\memcard9\classification\results",age_net, gender_net)
+    # process_pictures_from_database(r"C:\Temp\memcard9\classification\results")
 
-    process_one_video()
+    # process_one_video()
+
+    video_out_directory = Path(r"c:\Temp\memcard9\classification")
+    detect_from_video(None, 5, video_out_directory)
 
     # video_directory = r"C:\Temp\memcard9\20210106" 
     # video_directory = r"C:\Temp\memcard9\20210106" 
+    # video_directory = r"C:\Temp\memcard9\202003xx" 
     # video_out_directory = Path(r"c:\Temp\memcard9\classification")
-    # process_videos_in_directory(age_net, gender_net, video_directory, ["mp4"], 10, video_out_directory)
+    # process_videos_in_directory(video_directory, ["mp4"], 10, video_out_directory)
